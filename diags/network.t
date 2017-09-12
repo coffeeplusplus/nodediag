@@ -31,6 +31,10 @@ declare -r description="Check network config"
 
 source ${NODEDIAGDIR:-/etc/nodediag.d}/functions-tap || exit 1
 
+getlink()
+{
+    cat /sys/class/net/$1/operstate 2>/dev/null
+}
 getmode() {
     cat /sys/class/net/$1/mode 2>/dev/null
 }
@@ -54,6 +58,8 @@ diagconfig ()
         if test -h $file/device; then
             dev=${file##*/}
             echo "DIAG_NETWORK_DEV[$i]=\"$dev\""
+            test -n "$(getlink $dev)" \
+                && echo "DIAG_NETWORK_LINK[$i]=\"$(getlink $dev)\""
             test -n "$(getmtu $dev)" \
                 && echo "DIAG_NETWORK_MTU[$i]=\"$(getmtu $dev)\""
             test -n "$(getmode $dev)" \
@@ -81,6 +87,7 @@ diag_plan $(($numtests))
 
 for i in $(seq 0 $(($numdev - 1))); do
     dev=${DIAG_NETWORK_DEV[$i]}
+    link=${DIAG_NETWORK_LINK[$i]}
     mtu=${DIAG_NETWORK_MTU[$i]}
     mode=${DIAG_NETWORK_MODE[$i]}
     duplex=${DIAG_NETWORK_DUPLEX[$i]}
@@ -89,6 +96,14 @@ for i in $(seq 0 $(($numdev - 1))); do
         diag_ok "$dev exists"
     else
         diag_fail "$dev does not exst"
+    fi
+    if [ -n "$link" ]; then
+        gotlink=$(getlink $dev)
+        if [ "$link" != "$gotlink" ]; then
+            diag_fail "$dev link $gotlink, expected '$link'"
+        else
+            diag_ok "$dev link $gotlink"
+        fi
     fi
     if [ -n "$mtu" ]; then
         gotmtu="$(getmtu $dev)"
